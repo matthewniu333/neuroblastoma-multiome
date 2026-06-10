@@ -9,7 +9,7 @@ Using the public multiome dataset GSE262189 (~42,000 nuclei across six neuroblas
 Does incorporating chromatin accessibility (ATAC) data improve the identification and interpretation of MYCN-associated neuroblastoma states compared to RNA data alone?
 
 ## Project Structure
-.
+```
 ├── data/                  # Raw and processed AnnData/muon objects
 ├── notebooks/             # Exploratory analysis and visualization
 ├── preprocessing/         # RNA and ATAC preprocessing pipelines
@@ -17,6 +17,7 @@ Does incorporating chromatin accessibility (ATAC) data improve the identificatio
 ├── evaluation/            # Benchmarking scripts
 ├── interpretability/      # Peak-to-gene and TF motif analyses
 └── README.md
+```
 
 ## Objectives
 Preprocess and analyze paired snRNA-seq and snATAC-seq data.
