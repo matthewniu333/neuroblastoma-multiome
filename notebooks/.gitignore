@@ -1,7 +1,0 @@
-data/
-models/
-*.h5
-*.h5ad
-*.csv
-neuroblastoma-env/
-.ipynb_checkpoints/
