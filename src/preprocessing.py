@@ -3,9 +3,13 @@
 import scanpy as sc
 import anndata as ad
 import pandas as pd
-    
+import os
+import warnings
+
+warnings.filterwarnings("ignore", category = UserWarning)
+
 # RNA preprocessing function
-def preprocess_rna(filepath, cell_line_name, min_genes = 1000, max_counts = 100000, pct_mt_max = 20, n_hvgs = 2000, n_pcs = 50, n_neighbors = 15,
+def preprocess_rna(filepath, cell_line_name, project_root = None, min_genes = 1000, max_counts = 100000, pct_mt_max = 20, n_hvgs = 2000, n_pcs = 50, n_neighbors = 15,
                    leiden_resolution = 0.5, output_dir = "data/processed/"):
     """
     Full RNA preprocessing pipeline for a single neuroblastoma cell line.
@@ -36,6 +40,12 @@ def preprocess_rna(filepath, cell_line_name, min_genes = 1000, max_counts = 1000
     adata: Anndata
         Fully processed AnnData object
     """
+    # Resolve output directory
+    if project_root is None:
+        project_root = os.path.abspath(os.path.join(os.getcwd(), ".."))
+    output_dir = os.path.join(project_root, "data", "processed")
+    os.makedirs(output_dir, exist_ok = True)
+    
     print(f"\n{'='*50}")
     print(f"Processing: {cell_line_name}")
     print(f"{'='*50}")
@@ -81,13 +91,11 @@ def preprocess_rna(filepath, cell_line_name, min_genes = 1000, max_counts = 1000
     # Neighbors + UMAP + Clustering
     sc.pp.neighbors(adata, n_neighbors = n_neighbors, n_pcs = 15)
     sc.tl.umap(adata)
-    sc.tl.leiden(adata, resolution = leiden_resolution)
+    sc.tl.leiden(adata, resolution = leiden_resolution, flavor = "igraph", n_iterations = 2, directed = False)
     print(f"Clusters: {adata.obs['leiden'].nunique()}")
     
     # Save
-    import os
-    os.makedirs(output_dir, exist_ok = True)
-    out_path = f"{output_dir}{cell_line_name}_rna_processed.h5ad"
+    out_path = os.path.join(output_dir, f"{cell_line_name}_rna_processed.h5ad")
     adata.write_h5ad(out_path)
     print(f"Saved: {out_path}")
     
