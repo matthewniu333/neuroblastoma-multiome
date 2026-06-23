@@ -10,7 +10,7 @@ warnings.filterwarnings("ignore", category = UserWarning)
 
 # RNA preprocessing function
 def preprocess_rna(filepath, cell_line_name, project_root = None, min_genes = 1000, max_counts = 100000, pct_mt_max = 20, n_hvgs = 2000, n_pcs = 50, n_neighbors = 15,
-                   leiden_resolution = 0.5, output_dir = "data/processed/"):
+                   leiden_resolution = 0.5):
     """
     Full RNA preprocessing pipeline for a single neuroblastoma cell line.
 
@@ -85,19 +85,38 @@ def preprocess_rna(filepath, cell_line_name, project_root = None, min_genes = 10
     adata = adata[:, adata.var.highly_variable].copy()
     
     # Scale + PCA
+    # keep unscaled copy
+    adata_unscaled = adata.copy()
+    
     sc.pp.scale(adata, max_value = 10)
     sc.pp.pca(adata, n_comps = n_pcs)
+
+    # Transfer PCA results to unscaled object
+    adata_unscaled.obsm['X_pca'] = adata.obsm['X_pca']
+    adata_unscaled.varm['PCs'] = adata.varm['PCs']
+    adata_unscaled.uns['pca'] = adata.uns['pca']
 
     # Neighbors + UMAP + Clustering
     sc.pp.neighbors(adata, n_neighbors = n_neighbors, n_pcs = 15)
     sc.tl.umap(adata)
     sc.tl.leiden(adata, resolution = leiden_resolution, flavor = "igraph", n_iterations = 2, directed = False)
-    print(f"Clusters: {adata.obs['leiden'].nunique()}")
+
+    # Transfer neighbors/UMAP/clustering results to unscaled object
+    adata_unscaled.obsm['X_umap'] = adata.obsm['X_umap']
+    adata_unscaled.obs['leiden'] = adata.obs['leiden']
+    adata_unscaled.uns['leiden'] = adata.uns['leiden']
+    adata_unscaled.uns['umap'] = adata.uns['umap']
+    adata_unscaled.obsp['distances'] = adata.obsp['distances']
+    adata_unscaled.obsp['connectivities'] = adata.obsp['connectivities']
+    adata_unscaled.uns['neighbors'] = adata.uns['neighbors']
+
+    print(f"Clusters: {adata_unscaled.obs['leiden'].nunique()}")
     
-    # Save
-    out_path = os.path.join(output_dir, f"{cell_line_name}_rna_processed.h5ad")
-    adata.write_h5ad(out_path)
-    print(f"Saved: {out_path}")
+    # Save unscaled object
+    out_path = os.path.join(project_root, "data", "processed", f"{cell_line_name}_rna_processed.h5ad")
+    print(f"Saving to: {out_path}")
+    adata_unscaled.write_h5ad(out_path, compression = 'gzip')
+    print(f"Saved successfully: {os.path.exists(out_path)}")
     
-    return adata
+    return adata_unscaled
     
