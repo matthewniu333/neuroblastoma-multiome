@@ -10,13 +10,13 @@ Does incorporating chromatin accessibility (ATAC) data improve the identificatio
 
 ## Project Structure
 ```
+├── data/                  # Raw and processed data (not included in repositoty)
 ├── notebooks/             # Exploratory analysis and visualization
-├── preprocessing/         # RNA and ATAC preprocessing pipelines
+├── src/                   # Reusable preprocessing functions
 ├── models/                # MultiVI baseline
-├── evaluation/            # Benchmarking scripts
-├── interpretability/      # Peak-to-gene and TF motif analyses
+├── outputs/               # Saved plots and figures
+├── analysis/              # Results
 └── README.me
-*Data not included in repository*
 ```
 
 ## Objectives
