@@ -3,6 +3,7 @@
 import scanpy as sc
 import anndata as ad
 import pandas as pd
+import numpy as np
 import os
 import warnings
 
@@ -119,4 +120,102 @@ def preprocess_rna(filepath, cell_line_name, project_root = None, min_genes = 10
     print(f"Saved successfully: {os.path.exists(out_path)}")
     
     return adata_unscaled
+
+#ATAC preprocessing function
+def preprocess_atac(filepath, cell_line_name, project_root = None, min_peaks = 2000, n_neighbors = 15, leiden_resolution = 0.5):
+    """
+    ATAC preprocessing pipeline for a single neuroblastoma cell line.
+
+    Parameters
+    --------
+    filepath: str
+        Path to the raw ATAC .h5ad file (created from CSV in Week 1)
+    cell_line_name: str
+        Name of the cell line
+    project_root: str, optional
+        Absolute path to the project root directory.
+    min_peaks: int
+        Minimum peaks per cell (default 2000)
+    n_neighbors: int
+        Neighbors for graph construction (default 15)
+    leiden_resolution: float
+        Leiden clustering resolution (default 0.5)
+
+    Returns
+    ------
+    adata: Anndata
+        Processed ATAC Anndata (raw int32 sparse .X, LSI/UMAP/leiden in obsm/obs)
+    """
+    import muon as mu
+
+    if project_root is None:
+        project_root = os.path.abspath(os.path.join(os.getcwd(), ".."))
+    output_dir = os.path.join(project_root, "data", "processed")
+    os.makedirs(output_dir, exist_ok = True)
+
+    print(f"\n{'='*50}")
+    print(f"Processing: {cell_line_name}")
+    print(f"{'='*50}")
+
+    # Load
+    adata = ad.read_h5ad(filepath)
+    print(f"Loaded: {adata.shape}")
+
+    # Fix barcodes (. -> -)
+    adata.obs_names = adata.obs_names.str.replace(".", "-", regex = False)
+
+    # Convert to int32 to halve memory footprint
+    from scipy.sparse import csr_matrix
+    adata.X = csr_matrix(adata.X.astype(np.int32))
+    print(f"dtype: {adata.X.dtype}")
+
+    # QC metrics
+    adata.obs['n_peaks'] = np.diff(adata.X.tocsr().indptr)
+    adata.obs['total_counts'] = np.asarray(adata.X.sum(axis = 1)).flatten()
+    print(adata.obs[['n_peaks', 'total_counts']].describe())
+
+    # Filter cells
+    adata = adata[adata.obs['n_peaks'] >= min_peaks].copy()
+    print(f"After cell filter: {adata.shape}")
+
+    # Filter peaks
+    peak_cell_counts = np.diff(adata.X.tocsc().indptr)
+    peaks_before = adata.n_vars
+    adata = adata[:, peak_cell_counts >= 5].copy()
+    print(f"After peak filter: {adata.shape} ({peaks_before - adata.n_vars} peaks removed)")
+
+    # Save raw sparse counts before TF-IDF (needed for MultiVI)
+    raw_X = adata.X.copy()
+
+    #TF-IDF normalization
+    mu.atac.pp.tfidf(adata, scale_factor = 1e4)
+    print("TF-IDF complete")
+
+    #LSI
+    mu.atac.tl.lsi(adata)
+    print("LSI complete")
+
+    # Skip first LSI component (technical depth artifact)
+    adata.obsm['X_lsi_filtered'] = adata.obsm['X_lsi'][:, 1:30]
+
+    # Neighbors + UMAP + Clustering
+    sc.pp.neighbors(adata, use_rep = 'X_lsi_filtered', n_neighbors = n_neighbors)
+    sc.tl.umap(adata)
+    sc.tl.leiden(adata, resolution = leiden_resolution, flavor = "igraph", n_iterations = 2, directed = False)
+    print(f"Clusters: {adata.obs['leiden'].nunique()}")
+
+    # Restore raw sparse counts to .X (MultiVI needs raw counts)
+    adata.X = raw_X
+    print(f"Restored raw sparse counts to .X")
+
+    # Add cell line label
+    adata.obs['cell_line'] = cell_line_name
+
+    # Save
+    out_path = os.path.join(project_root, "data", "processed", f"{cell_line_name}_atac_processed.h5ad")
+    print(f"Saving to: {out_path}")
+    adata.write_h5ad(out_path, compression = 'gzip')
+    print(f"Saved successfully: {os.path.exists(out_path)}")
+
+    return adata
     
